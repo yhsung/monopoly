@@ -41,11 +41,3 @@ This is a web-based, multiplayer Monopoly game with a modern and clean user inte
 *   **JavaScript:** The game logic and interactivity.
 *   **Tone.js:** The audio engine for the sound effects.
 *   **Gemini API:** Used for the AI-powered taunts and nicknames.
-
-## To-Do
-
-*   Add support for online multiplayer.
-*   Implement a trading system between players.
-*   Add more animations and visual effects.
-*   Create a more detailed options menu with more customization options.
-*   Add a "house rules" feature to allow players to customize the rules of the game.
