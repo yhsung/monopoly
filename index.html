@@ -9,10 +9,28 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/7.2.0/introjs.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/7.2.0/intro.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
     <style>
         body {
             font-family: 'Noto Sans TC', 'Roboto', sans-serif;
             overflow: hidden; /* 防止動畫期間出現滾動條 */
+        }
+        .board-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 18px;
+        }
+        .webgl-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.85;
+            pointer-events: none;
+        }
+        .board {
+            position: relative;
+            z-index: 1;
         }
         .board {
             display: grid;
@@ -183,10 +201,17 @@
             height: 20px;
             border-radius: 50%;
             position: absolute;
-            transition: all 0.3s ease-in-out;
+            transform: translate(-50%, -50%);
+            transition: top 0.3s ease, left 0.3s ease;
             border: 2px solid white;
             box-shadow: 0 0 5px rgba(0,0,0,0.7);
             z-index: 10;
+        }
+        .gui-container {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 30;
         }
         .player-info {
             border: 2px solid;
@@ -343,6 +368,8 @@
         <!-- 中央面板: 棋盤與控制項 -->
         <div class="flex-grow flex flex-col items-center justify-center order-1 lg:order-2">
             <div class="board-container" style="transform: scale(0.8); transform-origin: top center;" data-step="3" data-intro="這就是我們的遊戲棋盤！您的目標是購買地產，讓對手破產，成為最有錢的玩家。">
+                 <canvas id="webgl-bg" class="webgl-layer"></canvas>
+                 <div id="gui-container" class="gui-container"></div>
                  <div class="board">
                     <!-- 將由 JS 填入內容 -->
                  </div>
@@ -461,7 +488,7 @@
                     if (!player.inJail && player.position < oldPosition) {
                         this.updateCash(200, `${player.name} 經過起點，領取 $200！`);
                     }
-                    await new Promise(resolve => setTimeout(resolve, 100)); // 每步之間的延遲
+                    await new Promise(resolve => setTimeout(resolve, 350)); // 每步之間的延遲
                 }
             }
 
@@ -1129,6 +1156,11 @@
                         this.rollDiceBtn.click();
                     }
                 });
+
+                window.addEventListener('resize', () => {
+                    this.calculateSpacePositions();
+                    game.players.forEach((p) => this.moveToken(p.id, p.position));
+                });
             }
 
             startTour() {
@@ -1244,6 +1276,8 @@
                     </div>
                 `;
                 this.boardElement.appendChild(centerLogo);
+
+                this.calculateSpacePositions();
             }
             
             createPlayerInfoCards(players) {
@@ -1272,7 +1306,7 @@
                     tokenEl.className = 'token';
                     tokenEl.style.backgroundColor = player.tokenColor;
                     
-                    document.querySelector(`.space[data-id='0']`).appendChild(tokenEl);
+                    document.querySelector('.board-container').appendChild(tokenEl);
                     this.moveToken(player.id, 0);
                 });
             }
@@ -1341,26 +1375,38 @@
 
             moveToken(playerId, position) {
                 const token = document.getElementById(`token-${playerId}`);
-                if (!token) {
-                    // console.error(`找不到玩家 ${playerId} 的棋子`);
-                    return;
-                }
-                const targetSpace = document.querySelector(`.space[data-id='${position}']`);
-                
-                // 在一格內定位棋子以避免重疊
+                if (!token || !this.spacePositions) return;
+
+                const rect = this.spaceRects[position];
+                if (!rect) return;
+
                 const offsets = [
-                    { top: '25%', left: '25%' }, { top: '25%', right: '25%' },
-                    { bottom: '25%', left: '25%' }, { bottom: '25%', right: '25%' },
-                    { top: '45%', left: '25%' }, { top: '45%', right: '25%' }
+                    { x: 0.25, y: 0.25 }, { x: 0.75, y: 0.25 },
+                    { x: 0.25, y: 0.75 }, { x: 0.75, y: 0.75 },
+                    { x: 0.25, y: 0.45 }, { x: 0.75, y: 0.45 }
                 ];
                 const offset = offsets[playerId % offsets.length];
-                
-                Object.keys(offset).forEach(key => token.style[key] = offset[key]);
-                ['top', 'bottom', 'left', 'right'].forEach(prop => {
-                    if (!offset[prop]) token.style[prop] = 'auto';
-                });
 
-                targetSpace.appendChild(token);
+                const x = rect.left - this.boardRect.left + rect.width * offset.x;
+                const y = rect.top - this.boardRect.top + rect.height * offset.y;
+
+                token.style.left = `${x}px`;
+                token.style.top = `${y}px`;
+                fancyEffects?.ping();
+            }
+
+            calculateSpacePositions() {
+                this.boardRect = document.querySelector('.board-container').getBoundingClientRect();
+                this.spacePositions = {};
+                this.spaceRects = {};
+                document.querySelectorAll('.space').forEach(space => {
+                    const rect = space.getBoundingClientRect();
+                    this.spaceRects[space.dataset.id] = rect;
+                    this.spacePositions[space.dataset.id] = {
+                        x: rect.left - this.boardRect.left + rect.width / 2,
+                        y: rect.top - this.boardRect.top + rect.height / 2
+                    };
+                });
             }
 
             updateLog(message) {
@@ -1636,6 +1682,131 @@
             }
         }
         
+
+        class FancyBoardEffects {
+            constructor() {
+                this.canvas = document.getElementById('webgl-bg');
+                this.guiHost = document.getElementById('gui-container');
+                this.enabled = !!(window.THREE && window.dat && this.canvas);
+                if (!this.enabled) return;
+
+                this.settings = {
+                    speed: 0.35,
+                    glow: 0.7,
+                    tokenTrail: 0.5,
+                    saturation: 1.0,
+                    pause: false
+                };
+
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+                this.camera.position.z = 5;
+
+                this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                this.uniforms = {
+                    uTime: { value: 0 },
+                    uGlow: { value: this.settings.glow },
+                    uTrail: { value: this.settings.tokenTrail },
+                    uSaturation: { value: this.settings.saturation }
+                };
+
+                const geometry = new THREE.PlaneGeometry(9, 9, 64, 64);
+                const material = new THREE.ShaderMaterial({
+                    transparent: true,
+                    uniforms: this.uniforms,
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec2 vUv;
+                        uniform float uTime;
+                        uniform float uGlow;
+                        uniform float uTrail;
+                        uniform float uSaturation;
+
+                        vec3 palette(float t) {
+                            vec3 a = vec3(0.2, 0.2, 0.4);
+                            vec3 b = vec3(0.5, 0.4, 0.6);
+                            vec3 c = vec3(1.0, 1.0, 1.0);
+                            vec3 d = vec3(0.0, 0.3, 0.6);
+                            return a + b * cos(6.28318 * (c * t + d));
+                        }
+
+                        void main() {
+                            vec2 uv = vUv - 0.5;
+                            float t = uTime * 0.08;
+                            float ring = sin((length(uv) * 14.0) - (uTime * (2.0 + uTrail * 4.0)));
+                            float ripple = sin((uv.x + uv.y + t) * 12.0) * 0.25;
+                            float pulse = smoothstep(0.8, 0.0, length(uv + vec2(sin(t * 2.0), cos(t * 1.5)) * 0.15));
+                            float shade = ring * 0.35 + ripple + pulse * (0.6 + uGlow);
+                            vec3 col = palette(shade + t);
+                            col = mix(vec3(0.15, 0.2, 0.3), col, uSaturation);
+                            float alpha = 0.35 + pulse * 0.45 + abs(ring) * 0.15;
+                            gl_FragColor = vec4(col, alpha);
+                        }
+                    `
+                });
+
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.scene.add(this.mesh);
+
+                this.setupGUI();
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.last = performance.now();
+                requestAnimationFrame((t) => this.animate(t));
+            }
+
+            setupGUI() {
+                this.gui = new dat.GUI({ autoPlace: false, width: 220 });
+                this.guiHost.appendChild(this.gui.domElement);
+                this.gui.add(this.settings, 'pause').name('Pause Effect');
+                this.gui.add(this.settings, 'speed', 0.05, 1.2, 0.01).name('Flow Speed');
+                this.gui.add(this.settings, 'glow', 0.0, 1.2, 0.01).name('Glow');
+                this.gui.add(this.settings, 'tokenTrail', 0.0, 1.0, 0.01).name('Token Trail');
+                this.gui.add(this.settings, 'saturation', 0.2, 1.4, 0.01).name('Saturation');
+            }
+
+            resize() {
+                const parent = this.canvas.parentElement;
+                if (!parent) return;
+                const w = parent.clientWidth;
+                const h = parent.clientHeight;
+                this.renderer.setSize(w, h, false);
+                this.camera.aspect = w / Math.max(h, 1);
+                this.camera.updateProjectionMatrix();
+            }
+
+            animate(ts) {
+                const dt = (ts - this.last) / 1000;
+                this.last = ts;
+                if (!this.settings.pause) {
+                    this.uniforms.uTime.value += dt * 60 * this.settings.speed;
+                }
+                this.uniforms.uGlow.value = this.settings.glow;
+                this.uniforms.uTrail.value = this.settings.tokenTrail;
+                this.uniforms.uSaturation.value = this.settings.saturation;
+
+                this.mesh.rotation.z += dt * 0.04;
+                this.renderer.render(this.scene, this.camera);
+                requestAnimationFrame((t) => this.animate(t));
+            }
+
+            ping() {
+                if (!this.enabled) return;
+                this.uniforms.uGlow.value = Math.min(1.2, this.settings.glow + 0.2);
+                setTimeout(() => {
+                    this.uniforms.uGlow.value = this.settings.glow;
+                }, 150);
+            }
+        }
+
         class AudioController {
             constructor() {
                 this.isStarted = false;
@@ -1722,6 +1893,7 @@
         const game = new Game();
         const ui = new UI();
         const audio = new AudioController();
+        const fancyEffects = new FancyBoardEffects();
         game.loadConfig();
         ui.initialize();
 
@@ -1785,4 +1957,3 @@
     </script>
 </body>
 </html>
-

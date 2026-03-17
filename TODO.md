@@ -14,7 +14,6 @@ This file tracks planned features and improvements for the Monopoly game.
 This is a list of potential enhancements to make the game more dynamic and visually appealing.
 
 ### Board and Piece Animations
-*   **Smooth Token Movement:** Animate tokens sliding or hopping between squares.
 *   **Property Purchase Effect:** Add a visual effect (e.g., a color flash) when a property is bought.
 *   **Building Animations:** Animate houses and hotels being built, for example, by having them drop onto the board.
 *   **Active Space Highlight:** Make the current player's space glow or pulse.
